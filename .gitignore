@@ -1,0 +1,12 @@
+# Java build artifacts
+*.class
+
+# Project-specific generated outputs
+implementation/bin/
+implementation/output/
+
+# IDE / OS noise
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
