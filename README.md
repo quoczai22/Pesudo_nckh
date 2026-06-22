@@ -44,9 +44,9 @@ docs/
 
 # Tiến độ hiện tại
 
-* [ ] Biên dịch thành công dự án.
-* [ ] Chạy thành công chương trình.
-* [ ] Xác minh các bộ dữ liệu.
+* [x] Biên dịch thành công dự án.
+* [x] Chạy thành công chương trình.
+* [x] Xác minh các bộ dữ liệu.
 * [ ] Phân tích luồng thực thi của chương trình.
 * [ ] Hiểu cấu trúc Data IDList.
 * [ ] Hiểu cấu trúc pseudo-IDList.
