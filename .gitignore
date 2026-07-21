@@ -1,9 +1,14 @@
 # Java build artifacts
 *.class
+*.txt
+*.ps1
 
 # Project-specific generated outputs
 implementation/bin/
 implementation/output/
+docs/
+paper/
+slide/
 
 # IDE / OS noise
 .vscode/
