@@ -1,13 +1,11 @@
 package idlist;
 
-import java.util.BitSet;
 import sequence_abstractions.patterns.IPattern;
 
 /**
- * Inspired by SPMF. This is a projected IDList with simple idea. No UCB (Upper
- * bound constraint). The projected points to a Backbone Continuous Array
- * IDList. (IDList, the vertical database which is implemented in a continues
- * array.
+ * Inspired by the author's projected pseudo-IDList. It keeps a backbone
+ * continuous-array IDList and a projected local UCB/IUBC array that marks which
+ * parent rows survive a join.
  *
  * @author Huy
  */
@@ -18,6 +16,9 @@ public class PseudoIdList implements ProjectedIdList {
 	 */
 	protected IntArrayBuffer sequence_ItemsetEntries;
 	protected IntArrayBuffer backboneIDList = null;
+	protected int[] projectedLocalUcb = null;
+	protected int projectedLocalUniverseSize = 0;
+	protected PseudoIdList projectedLocalParent = null;
 	protected int support = 0;
 
 	/**
@@ -37,6 +38,19 @@ public class PseudoIdList implements ProjectedIdList {
 	private PseudoIdList(IntArrayBuffer backboneIDList, IntArrayBuffer projectedIDlist) {
 		this.backboneIDList = backboneIDList;
 		this.sequence_ItemsetEntries = projectedIDlist;
+	}
+
+	private PseudoIdList(
+			IntArrayBuffer backboneIDList,
+			IntArrayBuffer projectedIDlist,
+			int[] projectedLocalUcb,
+			int projectedLocalUniverseSize,
+			PseudoIdList projectedLocalParent) {
+		this.backboneIDList = backboneIDList;
+		this.sequence_ItemsetEntries = projectedIDlist;
+		this.projectedLocalUcb = projectedLocalUcb;
+		this.projectedLocalUniverseSize = projectedLocalUniverseSize;
+		this.projectedLocalParent = projectedLocalParent;
 	}
 
 	/**
@@ -140,23 +154,36 @@ public class PseudoIdList implements ProjectedIdList {
 		// BitSet newSequences = null;
 		// BitSet newSequences = new BitSet();
 		// List<SIDToBitmap> entries = idListMap.entrySet();
+		IntArrayBuffer projectedLocalIds = new IntArrayBuffer(this.getRowCount());
 		// If flag equals is activated
 		if (equals) {
 			// We execute a join for equal relation
 //			equalLoop(intersection, idListMap, null);
 			IntArrayBuffer intersectionBackboneList = new IntArrayBuffer(this.backboneIDList.size());
-			equalLoop(intersection, intersectionBackboneList, idListMap, idStandard.backboneIDList, null);
+			equalLoop(intersection, intersectionBackboneList, idListMap, idStandard.backboneIDList, projectedLocalIds);
 			intersection.trim();
 			intersectionBackboneList.trim();
-			PseudoIdList output = new PseudoIdList(intersectionBackboneList, intersection);
+			int[] localUcb = toTrimmedArray(projectedLocalIds);
+			PseudoIdList output = new PseudoIdList(
+					intersectionBackboneList,
+					intersection,
+					localUcb,
+					this.getRowCount(),
+					this);
 			output.support = intersection.size() / 2;
 			return output;
 		}
 //			else {
 			// Otherwise we execute a join for an after relation
-		laterLoop(intersection, idListMap, idStandard.backboneIDList, null);
+		laterLoop(intersection, idListMap, idStandard.backboneIDList, projectedLocalIds);
 		intersection.trim();
-		PseudoIdList output = new PseudoIdList(idStandard.backboneIDList, intersection);
+		int[] localUcb = toTrimmedArray(projectedLocalIds);
+		PseudoIdList output = new PseudoIdList(
+				idStandard.backboneIDList,
+				intersection,
+				localUcb,
+				this.getRowCount(),
+				this);
 		output.support = intersection.size() / 2;
 		return output;
 //		}
@@ -193,7 +220,7 @@ public class PseudoIdList implements ProjectedIdList {
 	 * @throws Exception
 	 */
 	private void equalLoop(IntArrayBuffer intersection, IntArrayBuffer intersectionBackboneList, IntArrayBuffer entries,
-			IntArrayBuffer otherBackboneIDList, BitSet sequences) {
+			IntArrayBuffer otherBackboneIDList, IntArrayBuffer projectedLocalIds) {
 		int i = 0, j = 0, aSid, bSid, aTidProjIndex, bTidProjIndex;
 		int aTid, bTid;
 		boolean firstElem = true;
@@ -223,6 +250,7 @@ public class PseudoIdList implements ProjectedIdList {
 							intersection.add(intersectionBackboneList.size());
 							intersection.add(intersectionBackboneList.size() + 1);
 							intersectionBackboneList.add(aSid);							
+							projectedLocalIds.add(i / 2);
 						}
 						intersectionBackboneList.add(aTid);
 						bTidProjIndex++;
@@ -262,7 +290,7 @@ public class PseudoIdList implements ProjectedIdList {
 	 *                               the new IdList is active
 	 */
 	private void laterLoop(IntArrayBuffer intersection, IntArrayBuffer entries, IntArrayBuffer otherBackboneIDList,
-			BitSet sequences) {
+			IntArrayBuffer projectedLocalIds) {
 		// For each entry
 		int i = 0, j = 0, aSid, bSid, aTidProjIndex, bTidProjIndex;
 		int aTid, bTid;
@@ -283,6 +311,7 @@ public class PseudoIdList implements ProjectedIdList {
 //    					intersection.add(aTidProjIndex);
 						intersection.add(entries.get(j));
 						intersection.add(bTidProjIndex);
+						projectedLocalIds.add(i / 2);
 						break;
 					}
 					bTidProjIndex++;
@@ -368,6 +397,30 @@ public class PseudoIdList implements ProjectedIdList {
 		}
 		int sequenceHeaderIndex = sequence_ItemsetEntries.get(localId * 2);
 		return -backboneIDList.get(sequenceHeaderIndex);
+	}
+
+	public boolean hasProjectedLocalUcbFor(PseudoIdList parent) {
+		return projectedLocalUcb != null && projectedLocalParent == parent;
+	}
+
+	public int[] getProjectedLocalUcb() {
+		return projectedLocalUcb;
+	}
+
+	public int getProjectedLocalUniverseSize() {
+		return projectedLocalUniverseSize;
+	}
+
+	public PseudoIdList getProjectedLocalParent() {
+		return projectedLocalParent;
+	}
+
+	private static int[] toTrimmedArray(IntArrayBuffer buffer) {
+		int[] values = new int[buffer.size()];
+		for (int i = 0; i < values.length; i++) {
+			values[i] = buffer.get(i);
+		}
+		return values;
 	}
 
 	public void setBackbone_idlist(IntArrayBuffer backbone_idlist) {
