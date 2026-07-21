@@ -27,17 +27,12 @@ Mục tiêu hiện tại của dự án là **đọc hiểu, chạy thử và t�
 # Cấu trúc thư mục
 
 ```text
-paper/
-    Bài báo gốc và các tài liệu tham khảo.
-
 original-source/
     Mã nguồn dùng để nghiên cứu và đối chiếu.
 
 datasets/
     Các bộ dữ liệu sử dụng trong bài báo.
 
-docs/
-    Tài liệu ghi chú, phân tích và kết quả nghiên cứu.
 ```
 
 ---
@@ -47,11 +42,11 @@ docs/
 * [x] Biên dịch thành công dự án.
 * [x] Chạy thành công chương trình.
 * [x] Xác minh các bộ dữ liệu.
-* [ ] Phân tích luồng thực thi của chương trình.
-* [ ] Hiểu cấu trúc Data IDList.
-* [ ] Hiểu cấu trúc pseudo-IDList.
-* [ ] Hiểu cơ chế DUB.
-* [ ] Tái hiện kết quả thực nghiệm của bài báo.
+* [x] Phân tích luồng thực thi của chương trình.
+* [x] Hiểu cấu trúc Data IDList.
+* [x] Hiểu cấu trúc pseudo-IDList.
+* [x] Hiểu cơ chế DUB.
+* [x] Tái hiện kết quả thực nghiệm của bài báo.
 
 ---
 
@@ -60,4 +55,4 @@ docs/
 * Mã nguồn trong repository này **có thể không phải là mã nguồn gốc do tác giả bài báo công bố**.
 * Repository được xem như một **bản hiện thực (reproduction/reference implementation)** và sẽ được đối chiếu cẩn thận với nội dung của bài báo.
 * Trong giai đoạn hiện tại **không chỉnh sửa, tối ưu hoặc thay đổi thuật toán** cho đến khi đã hiểu đầy đủ toàn bộ quá trình hiện thực.
-* Mọi khác biệt giữa mã nguồn và bài báo sẽ được ghi nhận trong thư mục `docs/`.
+
