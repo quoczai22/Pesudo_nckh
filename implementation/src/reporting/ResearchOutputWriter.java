@@ -15,6 +15,7 @@ import java.util.Map;
 public class ResearchOutputWriter {
     private final String outputDir;
     private final Map<String, BufferedWriter> writers;
+    private boolean traceEnabled = true;
 
     public ResearchOutputWriter(String outputDir) {
         this.outputDir = outputDir;
@@ -24,6 +25,31 @@ public class ResearchOutputWriter {
         if (!dir.exists()) {
             dir.mkdirs();
         }
+
+        // Disable tracing if system property "noTrace" or env var "NO_TRACE" is true
+        if ("true".equalsIgnoreCase(System.getProperty("noTrace")) ||
+            "true".equalsIgnoreCase(System.getenv("NO_TRACE"))) {
+            this.traceEnabled = false;
+        }
+    }
+
+    public ResearchOutputWriter(String outputDir, boolean traceEnabled) {
+        this.outputDir = outputDir;
+        this.writers = new HashMap<>();
+        
+        File dir = new File(outputDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        this.traceEnabled = traceEnabled;
+    }
+
+    public boolean isTraceEnabled() {
+        return traceEnabled;
+    }
+
+    public void setTraceEnabled(boolean traceEnabled) {
+        this.traceEnabled = traceEnabled;
     }
 
     /**
@@ -55,17 +81,21 @@ public class ResearchOutputWriter {
      * Convenience method for detailed algorithmic traces.
      */
     public void trace(String message) {
-        log("Detailed_Execution_Trace.txt", message);
+        if (traceEnabled) {
+            log("Detailed_Execution_Trace.txt", message);
+        }
     }
 
     /**
      * Convenience method for standardized section headers in trace log.
      */
     public void traceHeader(String title) {
-        trace("");
-        trace("=======================================================================");
-        trace("  " + title);
-        trace("=======================================================================");
+        if (traceEnabled) {
+            trace("");
+            trace("=======================================================================");
+            trace("  " + title);
+            trace("=======================================================================");
+        }
     }
 
     public String getOutputDir() {

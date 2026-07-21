@@ -16,6 +16,8 @@ public class MainCUP {
     private static final String KOSARAK_PATH = "datasets/Kosarak.txt";
     private static final String MSNBC_PATH = "datasets/MSNBC.txt";
 
+    private static boolean noTrace = true;
+
     /**
      * Boots the Paper 1 pipeline, parses CLI arguments, and executes CUP end-to-end.
      */
@@ -34,6 +36,8 @@ public class MainCUP {
                 minSupport = Double.parseDouble(args[i + 1]);
             } else if (args[i].equals("--out") && i + 1 < args.length) {
                 outputDir = args[i + 1];
+            } else if (args[i].equals("--no-trace")) {
+                noTrace = true;
             }
         }
 
@@ -48,7 +52,7 @@ public class MainCUP {
         }
 
         throw new IllegalArgumentException(
-                "Provide either --dataset fifa|bms2|kosarak|msnbc or --data <path>.");
+                "Provide either --dataset fifa|bms2|kosarak|msnbc or --data <path>. Use --no-trace to disable detailed trace.");
     }
 
     private static void runNamedDataset(String datasetKey, double minSupport, String customOutputDir) {
@@ -101,11 +105,15 @@ public class MainCUP {
         System.out.println("Execution status        : initialized\n");
 
         ResearchOutputWriter logger = new ResearchOutputWriter(outputDir);
+        if (noTrace) {
+            logger.setTraceEnabled(false);
+        }
         ClickstreamSequenceDatabase db = new ClickstreamSequenceDatabase();
 
         try {
             db.loadFile(dataFile, logger);
             CUPAlgorithm algo = new CUPAlgorithm(minSupport, logger);
+            algo.setStorePatternsInMemory(false);
             algo.run(db);
         } catch (IOException e) {
             System.err.println("Fatal execution failure while loading input data: " + e.getMessage());

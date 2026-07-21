@@ -42,6 +42,10 @@ public class CUPAlgorithm {
     private long localBitmapUniverseBits = 0L;
     private int maxLocalBitmapUniverseBits = 0;
 
+    private boolean storePatternsInMemory = true;
+    private int frequentPatternCount = 0;
+    private final Map<Integer, IntSupportAccumulator> patternLengthProfile = new TreeMap<>();
+
     public CUPAlgorithm(double relativeMinSupport, ResearchOutputWriter logger) {
         this.relativeMinSupport = relativeMinSupport;
         this.logger = logger;
@@ -49,6 +53,27 @@ public class CUPAlgorithm {
         this.onePatternIdLists = new HashMap<>();
         this.onePatternCidBitsets = new HashMap<>();
         this.frequentPatterns = new LinkedHashMap<>();
+    }
+
+    public void setStorePatternsInMemory(boolean storePatternsInMemory) {
+        this.storePatternsInMemory = storePatternsInMemory;
+    }
+
+    private void registerFrequentPattern(List<Integer> pattern, int support) {
+        frequentPatternCount++;
+        int length = pattern.size();
+        patternLengthProfile.computeIfAbsent(length, k -> new IntSupportAccumulator()).add(support);
+
+        if (storePatternsInMemory) {
+            frequentPatterns.put(pattern, support);
+        } else {
+            StringBuilder spmf = new StringBuilder();
+            for (int item : pattern) {
+                spmf.append(item).append(" -1 ");
+            }
+            spmf.append("-2 #SUP: ").append(support);
+            logger.log("Extracted_Patterns.txt", spmf.toString());
+        }
     }
 
     /**
@@ -135,9 +160,13 @@ public class CUPAlgorithm {
     private void step3DFSMining() {
         logger.traceHeader("STEP 3: DFS - Explore Prefix equivalence Lattice (BitSets Enabled)");
 
+        if (!storePatternsInMemory) {
+            logger.ensureFile("Extracted_Patterns.txt");
+        }
+
         for (int item : frequentItems) {
             int sup = onePatternIdLists.get(item).getSupport();
-            frequentPatterns.put(Collections.singletonList(item), sup);
+            registerFrequentPattern(Collections.singletonList(item), sup);
         }
 
         for (int i = 0; i < frequentItems.size(); i++) {
@@ -146,7 +175,14 @@ public class CUPAlgorithm {
 
             for (int j = 0; j < frequentItems.size(); j++) {
                 int itemB = frequentItems.get(j);
-                List<Integer> cand = Arrays.asList(itemA, itemB);
+                List<Integer> cand = null;
+                if (storePatternsInMemory || logger.isTraceEnabled()) {
+                    cand = Arrays.asList(itemA, itemB);
+                }
+
+                if (cand != null && storePatternsInMemory && frequentPatterns.containsKey(cand)) {
+                    continue;
+                }
 
                 if (!dubCheckFast(onePatternCidBitsets.get(itemA), onePatternCidBitsets.get(itemB), cand)) {
                     continue;
@@ -159,7 +195,10 @@ public class CUPAlgorithm {
 
                 int sup = joined.getSupport();
                 if (sup >= absoluteMinSupport) {
-                    frequentPatterns.put(cand, sup);
+                    if (cand == null) {
+                        cand = Arrays.asList(itemA, itemB);
+                    }
+                    registerFrequentPattern(cand, sup);
                     classMembers.add(new PatternClass(
                             cand,
                             joined,
@@ -192,10 +231,13 @@ public class CUPAlgorithm {
                         ? pcA.pattern.get(pcA.pattern.size() - 1)
                         : pcB.pattern.get(pcB.pattern.size() - 1);
 
-                List<Integer> cand = new ArrayList<>(pcA.pattern);
-                cand.add(lastB);
+                List<Integer> cand = null;
+                if (storePatternsInMemory || logger.isTraceEnabled()) {
+                    cand = new ArrayList<>(pcA.pattern);
+                    cand.add(lastB);
+                }
 
-                if (frequentPatterns.containsKey(cand)) {
+                if (cand != null && storePatternsInMemory && frequentPatterns.containsKey(cand)) {
                     continue;
                 }
 
@@ -210,7 +252,11 @@ public class CUPAlgorithm {
 
                 int sup = joined.getSupport();
                 if (sup >= absoluteMinSupport) {
-                    frequentPatterns.put(cand, sup);
+                    if (cand == null) {
+                        cand = new ArrayList<>(pcA.pattern);
+                        cand.add(lastB);
+                    }
+                    registerFrequentPattern(cand, sup);
                     newClass.add(new PatternClass(
                             cand,
                             joined,
@@ -236,7 +282,9 @@ public class CUPAlgorithm {
 
         if (!ok) {
             dubPruneCount++;
-            logger.trace("      DUB Fast-Prune: " + debugName + " -> |S?|=" + size + " < " + absoluteMinSupport + " -> PRUNE");
+            if (logger.isTraceEnabled()) {
+                logger.trace("      DUB Fast-Prune: " + debugName + " -> |S?|=" + size + " < " + absoluteMinSupport + " -> PRUNE");
+            }
         }
         return ok;
     }
@@ -253,10 +301,12 @@ public class CUPAlgorithm {
         boolean ok = size >= absoluteMinSupport;
         if (!ok) {
             dubPruneCount++;
-            logger.trace("      DUB Local-Prune: " + debugName
-                    + " -> |S?|=" + size
-                    + " < " + absoluteMinSupport
-                    + " (local universe=" + bitmapA.getUniverseSize() + ") -> PRUNE");
+            if (logger.isTraceEnabled()) {
+                logger.trace("      DUB Local-Prune: " + debugName
+                        + " -> |S?|=" + size
+                        + " < " + absoluteMinSupport
+                        + " (local universe=" + bitmapA.getUniverseSize() + ") -> PRUNE");
+            }
         }
         return ok;
     }
@@ -299,6 +349,10 @@ public class CUPAlgorithm {
      * Exports discovered frequent patterns in SPMF-compatible support format.
      */
     private void exportExtractedPatterns() {
+        if (!storePatternsInMemory) {
+            // Already exported on-the-fly
+            return;
+        }
         logger.ensureFile("Extracted_Patterns.txt");
         List<Map.Entry<List<Integer>, Integer>> sorted = new ArrayList<>(frequentPatterns.entrySet());
         sorted.sort(Comparator.comparingInt((Map.Entry<List<Integer>, Integer> e) -> e.getKey().size())
@@ -318,14 +372,8 @@ public class CUPAlgorithm {
      * Exports per-pattern-length support statistics for reproducible quantitative analysis.
      */
     private void exportPatternLengthProfile() {
-        Map<Integer, IntSupportAccumulator> byLength = new TreeMap<>();
-        for (Map.Entry<List<Integer>, Integer> entry : frequentPatterns.entrySet()) {
-            int length = entry.getKey().size();
-            byLength.computeIfAbsent(length, k -> new IntSupportAccumulator()).add(entry.getValue());
-        }
-
         logger.log("Pattern_Length_Profile.tsv", "pattern_length\tpattern_count\tmin_support\tmax_support\tavg_support");
-        for (Map.Entry<Integer, IntSupportAccumulator> entry : byLength.entrySet()) {
+        for (Map.Entry<Integer, IntSupportAccumulator> entry : patternLengthProfile.entrySet()) {
             int length = entry.getKey();
             IntSupportAccumulator stats = entry.getValue();
             logger.log("Pattern_Length_Profile.tsv", String.format(Locale.US,
@@ -347,7 +395,7 @@ public class CUPAlgorithm {
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "relative_minsup\t%.6f\tratio", relativeMinSupport));
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "absolute_minsup\t%d\tsequence", absoluteMinSupport));
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "runtime_ms\t%d\tms", elapsedMillis));
-        logger.log("Metrics_Research.tsv", String.format(Locale.US, "frequent_pattern_count\t%d\tpattern", frequentPatterns.size()));
+        logger.log("Metrics_Research.tsv", String.format(Locale.US, "frequent_pattern_count\t%d\tpattern", frequentPatternCount));
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "temporal_join_count\t%d\tjoin", joinCount));
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "dub_prune_count\t%d\tcandidate", dubPruneCount));
         logger.log("Metrics_Research.tsv", String.format(Locale.US, "local_dub_bitmap_count\t%d\tbitmap", localBitmapCount));
@@ -366,9 +414,9 @@ public class CUPAlgorithm {
         sb.append("Execution time (ms): ").append(elapsedMillis).append("\n");
         sb.append("Relative minSup      : ").append(String.format(Locale.US, "%.4f", relativeMinSupport)).append("\n");
         sb.append("Absolute minSup      : ").append(absoluteMinSupport).append("\n");
-        sb.append("Total frequent patterns: ").append(frequentPatterns.size()).append("\n");
+        sb.append("Total frequent patterns: ").append(frequentPatternCount).append("\n");
         sb.append("Temporal joins executed: ").append(joinCount).append("\n");
-        sb.append("BitSet DUB prunes      : ").append(dubPruneCount).append("\n");
+        sb.append("BitSet UB prunes       : ").append(dubPruneCount).append("\n");
         sb.append("Local DUB bitmaps      : ").append(localBitmapCount).append("\n");
         sb.append("Max local bitmap bits  : ").append(maxLocalBitmapUniverseBits).append("\n");
         logger.log("Stats_Summary.txt", sb.toString());
@@ -382,12 +430,12 @@ public class CUPAlgorithm {
         System.out.println("Paper 1 Result Summary: CUP (Pseudo-IDList + DUB)");
         System.out.println("=========================================================");
         System.out.println("Runtime              : " + elapsedMillis + " ms");
-        System.out.println("Relative minSup      : " + String.format(Locale.US, "%.2f", relativeMinSupport) + " (" + absoluteMinSupport + " sequences)");
+        System.out.println("Relative minSup      : " + String.format(Locale.US, "%.4f", relativeMinSupport) + " (" + absoluteMinSupport + " sequences)");
         System.out.println("Total Temporal Joins : " + joinCount);
-        System.out.println("DUB Pruned Elements  : " + dubPruneCount);
+        System.out.println("UB Pruned Elements   : " + dubPruneCount);
         System.out.println("Local DUB Bitmaps    : " + localBitmapCount);
         System.out.println("Max Local Bitmap Bits: " + maxLocalBitmapUniverseBits);
-        System.out.println("Frequent Patterns    : " + frequentPatterns.size());
+        System.out.println("Frequent Patterns    : " + frequentPatternCount);
         System.out.println("\nOutput artifact      : " + logger.getOutputDir() + "/Extracted_Patterns.txt");
     }
 
